@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Left or Right</title>
+  <style>
+    canvas {
+      border: 1px solid black;
+      margin-top: 10px;
+      cursor: crosshair;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    button {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Left or Right 팀 수과탐</h2>
+  <p>이 바탕에 점을 추가하고 '알고리즘 계산하기' 버튼을 누르세요.</p>
+  <canvas id="canvas" width="600" height="400"></canvas><br>
+  <button onclick="runConvexHull()">알고리즘 계산하기</button>
+  <button onclick="resetCanvas()">리셋</button>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const points = [];
+
+    canvas.addEventListener("click", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      points.push([x, y]);
+      drawPoint(x, y);
+    });
+
+    function drawPoint(x, y) {
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    function drawPath(path) {
+      ctx.beginPath();
+      ctx.moveTo(path[0][0], path[0][1]);
+      for (let i = 1; i < path.length; i++) {
+        ctx.lineTo(path[i][0], path[i][1]);
+      }
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function resetCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      points.length = 0;
+    }
+
+    function orientation(p, q, r) {
+      const val = (q[1] - p[1]) * (r[0] - q[0]) - 
+                  (q[0] - p[0]) * (r[1] - q[1]);
+      if (val === 0) return 0; // colinear
+      return val > 0 ? 1 : 2; // 1 = clockwise, 2 = counterclockwise
+    }
+
+    function pathCost(path) {
+      let cost = 0;
+      for (let i = 1; i < path.length; i++) {
+        const dx = path[i][0] - path[i - 1][0];
+        const dy = path[i][1] - path[i - 1][1];
+        cost += Math.sqrt(dx * dx + dy * dy);
+      }
+      return cost;
+    }
+
+    const convexHull = async (pointsInput) => {
+      const points = [...pointsInput];
+      const sp = points[0];
+
+      let leftmost = points[0];
+      for (const p of points) {
+        if (p[1] < leftmost[1]) {
+          leftmost = p;
+        }
+      }
+
+      const path = [leftmost];
+
+      while (true) {
+        const curPoint = path[path.length - 1];
+        let [selectedIdx, selectedPoint] = [0, null];
+
+        for (let [idx, p] of points.entries()) {
+          if (!selectedPoint || orientation(curPoint, p, selectedPoint) === 2) {
+            [selectedIdx, selectedPoint] = [idx, p];
+          }
+        }
+
+        points.splice(selectedIdx, 1);
+
+        if (selectedPoint === leftmost) {
+          break;
+        }
+
+        path.push(selectedPoint);
+      }
+
+      while (points.length > 0) {
+        let [bestRatio, bestPointIdx, insertIdx] = [Infinity, null, 0];
+
+        for (let [freeIdx, freePoint] of points.entries()) {
+          let [bestCost, bestIdx] = [Infinity, 0];
+          for (let [pathIdx, pathPoint] of path.entries()) {
+            const nextPathPoint = path[(pathIdx + 1) % path.length];
+
+            const evalCost =
+              pathCost([pathPoint, freePoint, nextPathPoint]) -
+              pathCost([pathPoint, nextPathPoint]);
+
+            if (evalCost < bestCost) {
+              [bestCost, bestIdx] = [evalCost, pathIdx];
+            }
+          }
+
+          const nextPoint = path[(bestIdx + 1) % path.length];
+          const prevCost = pathCost([path[bestIdx], nextPoint]);
+          const newCost = pathCost([path[bestIdx], freePoint, nextPoint]);
+          const ratio = newCost / prevCost;
+
+          if (ratio < bestRatio) {
+            [bestRatio, bestPointIdx, insertIdx] = [ratio, freeIdx, bestIdx + 1];
+          }
+        }
+
+        const [nextPoint] = points.splice(bestPointIdx, 1);
+        path.splice(insertIdx, 0, nextPoint);
+      }
+
+      const startIdx = path.findIndex(p => p === sp);
+      path.unshift(...path.splice(startIdx, path.length));
+      path.push(sp);
+
+      return path;
+    };
+
+    async function runConvexHull() {
+      if (points.length < 3) {
+        alert("Please add at least 3 points.");
+        return;
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const [x, y] of points) {
+        drawPoint(x, y);
+      }
+
+      const hull = await convexHull([...points]);
+      drawPath(hull);
+    }
+  </script>
+</body>
+</html>
